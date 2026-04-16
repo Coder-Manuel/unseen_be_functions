@@ -29,20 +29,13 @@ Deno.serve(async (req) => {
   if (!roomName) return new Response("OK");
 
   // Extract mission_id from room name
-  const missionId = roomName.replace("mission-", "");
+  const missionId = roomName.replace("msn::", "");
   switch (event.event) {
     case "participant_joined": {
-      // Check if BOTH scout and client are now in the room
-      const { data: session } = await supabase
-        .from("sessions")
-        .select("id, mission:missions(client_id, scout_id)")
-        .eq("room_name", roomName)
-        .single();
+      // Confirm if BOTH scout and client are now in the room
 
       // Get current participants in the room from the event metadata
-      // LiveKit sends participant identity = user UUID
-      const joinedIdentity = event.participant?.identity;
-      if (joinedIdentity == session?.mission[0].client_id) {
+      if (event.room?.numParticipants === 2) {
         await supabase
           .from("sessions")
           .update({

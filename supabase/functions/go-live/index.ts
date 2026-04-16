@@ -128,6 +128,7 @@ function generateLiveKitToken(
     canPublish,
     canSubscribe,
     roomJoin: true,
+    roomRecord: canPublish,
   });
 
   return token.toJwt();
