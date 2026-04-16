@@ -1,10 +1,8 @@
 import * as jose from "jsr:@panva/jose@6";
 
-type AuthContext = {
-  user: {
-    id: string;
-    role: string | unknown;
-  };
+type AuthUser = {
+  id: string;
+  role: string | unknown;
 };
 
 const SUPABASE_JWT_ISSUER = Deno.env.get("SB_JWT_ISSUER") ??
@@ -36,20 +34,18 @@ function verifySupabaseJWT(jwt: string) {
 // Validates authorization header
 export async function AuthMiddleware(
   req: Request,
-  next: (req: Request, ctx: AuthContext) => Promise<Response>,
+  next: (req: Request, authUser: AuthUser) => Promise<Response>,
 ) {
   try {
     const token = getAuthToken(req);
     const jwtData = await verifySupabaseJWT(token);
 
     if (jwtData.payload.sub) {
-      const ctx: AuthContext = {
-        user: {
-          id: jwtData.payload.sub,
-          role: jwtData.payload.role,
-        },
+      const authUser: AuthUser = {
+        id: jwtData.payload.sub,
+        role: jwtData.payload.role,
       };
-      return await next(req, ctx);
+      return await next(req, authUser);
     }
 
     return Response.json(
