@@ -2,10 +2,10 @@ import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import { AccessToken } from "livekit-server-sdk";
 import { LiveKitTokenInput } from "./interface.ts";
-import { AuthMiddleware } from "shared";
+import { ClientAuthMiddleware } from "shared";
 
 Deno.serve((r) =>
-  AuthMiddleware(r, async (req, authUser) => {
+  ClientAuthMiddleware(r, async (req, authUser) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,

@@ -32,7 +32,7 @@ function verifySupabaseJWT(jwt: string) {
 }
 
 // Validates authorization header
-export async function AuthMiddleware(
+export async function ClientAuthMiddleware(
   req: Request,
   next: (req: Request, authUser: AuthUser) => Promise<Response>,
 ) {
