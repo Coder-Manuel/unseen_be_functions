@@ -34,23 +34,29 @@ Deno.serve(async (req) => {
   switch (event.event) {
     case "participant_joined": {
       // Confirm if BOTH scout and client are now in the room
+      const { data: mission } = await supabase
+        .from("missions")
+        .select("client_id")
+        .eq("id", missionId)
+        .single();
 
       // Get current participants in the room from the event metadata
-      if (event.room?.numParticipants === 2) {
-        await supabase
-          .from("sessions")
-          .update({
-            status: "live",
-            started_at: new Date().toISOString(),
-          })
-          .eq("room_name", roomName);
+      const identity = event.participant?.identity;
+      if (identity !== mission?.client_id) break;
+      await supabase
+        .from("sessions")
+        .update({
+          status: "live",
+          started_at: new Date().toISOString(),
+        })
+        .eq("room_name", roomName);
 
-        // Also update mission status
-        await supabase
-          .from("missions")
-          .update({ status: "live" })
-          .eq("id", missionId);
-      }
+      // Also update mission status
+      await supabase
+        .from("missions")
+        .update({ status: "live" })
+        .eq("id", missionId);
+
       break;
     }
 

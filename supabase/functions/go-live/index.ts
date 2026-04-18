@@ -75,7 +75,7 @@ Deno.serve((r) =>
     const token = await generateLiveKitToken({
       room,
       identity: authUser.id,
-      canPublish: isScout,
+      canPublish: true,
       canSubscribe: true,
       durationSec: mission.duration_in_sec,
     });
