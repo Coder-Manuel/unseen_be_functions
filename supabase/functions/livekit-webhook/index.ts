@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     console.error(e);
     return new Response("Unauthorized", { status: 401 });
   }
+  console.log("EVENT: ", event);
 
   const roomName = event.room?.name;
   if (!roomName) return new Response("OK");
