@@ -19,8 +19,8 @@ Deno.serve((r) =>
         id, 
         status, 
         duration_in_sec, 
-        client:users!missions_client_id_fkey!inner (id, fcm_token), 
-        scout:users!missions_scout_id_fkey (id, fcm_token), 
+        client:profiles!missions_client_id_fkey!inner (id, user_id, role), 
+        scout:profiles!missions_scout_id_fkey (id, user_id, role), 
         session:sessions!missions_session_id_fkey (id, room_name, status, host_token, client_token)
         `,
       )
@@ -56,7 +56,7 @@ Deno.serve((r) =>
         { status: 400 },
       );
     }
-    if (authUser.id !== scout.id && authUser.id !== client.id) {
+    if (authUser.id !== scout.user_id && authUser.id !== client.user_id) {
       return Response.json(
         { error: "Unauthorized for this mission" },
         { status: 403 },
@@ -69,12 +69,12 @@ Deno.serve((r) =>
     } else {
       room = `msn::${mission_id}`;
     }
-    const isScout = authUser.id === scout.id;
+    const isScout = authUser.id === scout.user_id && scout.role === "scout";
 
     // Generate token for scout | client
     const token = await generateLiveKitToken({
       room,
-      identity: authUser.id,
+      identity: isScout ? scout.id : client.id,
       canPublish: true,
       canSubscribe: true,
       durationSec: mission.duration_in_sec,
