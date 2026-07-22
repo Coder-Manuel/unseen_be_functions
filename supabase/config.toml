@@ -445,3 +445,17 @@ entrypoint = "./functions/end-livekit-room/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/end-livekit-room/*.html" ]
+
+[functions.mpesa-stk-push]
+enabled = true
+verify_jwt = true
+import_map = "./functions/mpesa-stk-push/deno.json"
+entrypoint = "./functions/mpesa-stk-push/index.ts"
+
+[functions.mpesa-callback]
+enabled = true
+# Safaricom calls this directly and cannot send a Supabase JWT.
+# It is instead guarded by the MPESA_CALLBACK_SECRET token query param.
+verify_jwt = false
+import_map = "./functions/mpesa-callback/deno.json"
+entrypoint = "./functions/mpesa-callback/index.ts"
