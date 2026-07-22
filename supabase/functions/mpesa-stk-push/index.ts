@@ -46,8 +46,7 @@ Deno.serve((r) =>
         status,
         price,
         currency,
-        client:profiles!missions_client_id_fkey!inner (id, user_id),
-        scout:profiles!missions_scout_id_fkey (id, user_id)
+        client:profiles!missions_client_id_fkey!inner (id, user_id)
       `)
       .eq("id", mission_id)
       .maybeSingle();
@@ -60,9 +59,6 @@ Deno.serve((r) =>
     const client = Array.isArray(mission.client)
       ? mission.client[0]
       : mission.client;
-    const scout = Array.isArray(mission.scout)
-      ? mission.scout[0]
-      : mission.scout;
 
     // Only the mission's own client may pay for it.
     if (!client || client.user_id !== authUser.id) {
@@ -103,9 +99,9 @@ Deno.serve((r) =>
           currency: mission.currency ?? "KES",
           provider: "mpesa",
           status: "pending",
+          type: "inbound",
           phone_number: phone,
           payer_profile_id: client.id,
-          payee_profile_id: scout?.id ?? null,
           mission_id,
         })
         .select("id")
