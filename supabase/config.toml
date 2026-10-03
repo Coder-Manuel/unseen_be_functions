@@ -459,3 +459,26 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/mpesa-callback/deno.json"
 entrypoint = "./functions/mpesa-callback/index.ts"
+
+[functions.intasend-collect]
+enabled = true
+verify_jwt = true
+import_map = "./functions/intasend-collect/deno.json"
+entrypoint = "./functions/intasend-collect/index.ts"
+
+[functions.intasend-payout]
+enabled = true
+# Called by internal services with an UNSEEN_FN_KEY-signed token, not a
+# Supabase user JWT; ServiceAuthMiddleware verifies it.
+verify_jwt = false
+import_map = "./functions/intasend-payout/deno.json"
+entrypoint = "./functions/intasend-payout/index.ts"
+
+[functions.intasend-webhook]
+enabled = true
+# IntaSend calls this directly and cannot send a Supabase JWT.
+# It is instead guarded by the INTASEND_WEBHOOK_CHALLENGE and re-verifies
+# every event against the IntaSend status APIs.
+verify_jwt = false
+import_map = "./functions/intasend-webhook/deno.json"
+entrypoint = "./functions/intasend-webhook/index.ts"

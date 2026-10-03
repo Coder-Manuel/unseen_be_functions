@@ -3,3 +3,5 @@ export * from "./jwt/client.auth.ts";
 export * from "./jwt/service.auth.ts";
 export * from "./mpesa/types.ts";
 export * from "./mpesa/client.ts";
+export * from "./intasend/types.ts";
+export * from "./intasend/client.ts";
