@@ -77,10 +77,12 @@ Deno.serve((r) =>
     }
 
     // Reuse an in-flight payment; reject if it is already paid.
+    // Scoped to inbound: a mission's outbound payout row must not count here.
     const { data: activeRows } = await supabase
       .from("payments")
       .select("id, status")
       .eq("mission_id", mission_id)
+      .eq("type", "inbound")
       .in("status", ["pending", "processing", "success"])
       .order("created_at", { ascending: false })
       .limit(1);
@@ -100,6 +102,7 @@ Deno.serve((r) =>
           provider: "mpesa",
           status: "pending",
           type: "inbound",
+          metadata: { method: "mpesa" },
           phone_number: phone,
           payer_profile_id: client.id,
           mission_id,

@@ -32,18 +32,3 @@ create unique index if not exists payments_one_active_per_mission_type
 create index if not exists payments_merchant_request_id_idx
   on public.payments (merchant_request_id)
   where merchant_request_id is not null;
-
--- 3. status/type are enums (payment_status / payment_type), so every label the
---    functions write must exist. These are no-ops when the label is there.
---    ALTER TYPE ... ADD VALUE cannot run inside a DO block or function, so the
---    statements stay top-level. Nothing below uses the new labels, which is the
---    one thing Postgres forbids in the adding transaction.
-alter type public.payment_status add value if not exists 'pending';
-alter type public.payment_status add value if not exists 'processing';
-alter type public.payment_status add value if not exists 'success';
-alter type public.payment_status add value if not exists 'failed';
-alter type public.payment_status add value if not exists 'cancelled';
-alter type public.payment_status add value if not exists 'refunded';
-
-alter type public.payment_type add value if not exists 'inbound';
-alter type public.payment_type add value if not exists 'outbound';

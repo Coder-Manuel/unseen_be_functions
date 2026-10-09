@@ -15,6 +15,8 @@ import {
 const FINAL = ["success", "failed", "cancelled", "refunded"];
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Safe to interpolate into a PostgREST `or` filter.
+const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 function ok() {
   return Response.json({ received: true });
@@ -70,10 +72,21 @@ async function handleCollection(
     .from("payments")
     .select("id, status, amount, currency, metadata")
     .eq("type", "inbound");
-  query = ref && UUID_RE.test(ref) ? query.eq("id", ref) : query.or(
-    `checkout_request_id.eq.${invoice.invoice_id},` +
-      `merchant_request_id.eq.${invoice.invoice_id}`,
-  );
+
+  if (ref && UUID_RE.test(ref)) {
+    query = query.eq("id", ref);
+  } else if (SAFE_ID_RE.test(invoice.invoice_id)) {
+    // The id goes into PostgREST's filter grammar, so only ever interpolate
+    // one that cannot contain its delimiters.
+    query = query.or(
+      `checkout_request_id.eq.${invoice.invoice_id},` +
+        `merchant_request_id.eq.${invoice.invoice_id}`,
+    );
+  } else {
+    console.warn("Unusable invoice id, skipping:", invoice.invoice_id);
+    return;
+  }
+
   const { data: payment } = await query.maybeSingle();
 
   if (!payment) {

@@ -11,9 +11,8 @@ import type {
 } from "./types.ts";
 import type { PaymentStatus } from "../mpesa/types.ts";
 
-// Sandbox: https://sandbox.intasend.com, live: https://payment.intasend.com
-const INTASEND_BASE_URL = Deno.env.get("INTASEND_BASE_URL") ??
-  "https://sandbox.intasend.com";
+const INTASEND_BASE_URL = (Deno.env.get("INTASEND_BASE_URL") ??
+  "https://sandbox.intasend.com/api/v1").replace(/\/$/, "");
 
 function requireEnv(key: string): string {
   const value = Deno.env.get(key);
@@ -90,7 +89,7 @@ export function mapSendMoneyStatus(
 export function intasendSTKPush(
   input: IntaSendSTKPushInput,
 ): Promise<IntaSendSTKPushResponse> {
-  return intasendRequest("/api/v1/payment/mpesa-stk-push/", {
+  return intasendRequest("/payment/mpesa-stk-push/", {
     amount: input.amount,
     phone_number: input.phoneNumber,
     api_ref: input.apiRef,
@@ -103,7 +102,7 @@ export function intasendCreateCheckout(
   input: IntaSendCheckoutInput,
 ): Promise<IntaSendCheckoutResponse> {
   return intasendRequest(
-    "/api/v1/checkout/",
+    "/checkout/",
     {
       amount: input.amount,
       currency: input.currency,
@@ -122,14 +121,14 @@ export function intasendCreateCheckout(
 export function intasendPaymentStatus(
   invoiceId: string,
 ): Promise<IntaSendPaymentStatusResponse> {
-  return intasendRequest("/api/v1/payment/status/", { invoice_id: invoiceId });
+  return intasendRequest("/payment/status/", { invoice_id: invoiceId });
 }
 
 // Send money to M-Pesa numbers (B2C). Straight-through: no approval step.
 export function intasendMpesaB2C(
   input: IntaSendB2CInput,
 ): Promise<IntaSendSendMoneyResult> {
-  return intasendRequest("/api/v1/send-money/initiate/", {
+  return intasendRequest("/send-money/initiate/", {
     provider: "MPESA-B2C",
     currency: input.currency,
     requires_approval: "NO",
@@ -143,7 +142,7 @@ export function intasendMpesaB2C(
 export function intasendSendMoneyStatus(
   trackingId: string,
 ): Promise<IntaSendSendMoneyResult> {
-  return intasendRequest("/api/v1/send-money/status/", {
+  return intasendRequest("/send-money/status/", {
     tracking_id: trackingId,
   });
 }

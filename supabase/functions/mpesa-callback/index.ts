@@ -32,9 +32,13 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
+  // checkout_request_id is the shared "in-flight provider request" column, so
+  // scope the lookup to inbound Daraja payments.
   const { data: payment } = await supabase
     .from("payments")
-    .select("id, status")
+    .select("id, status, metadata")
+    .eq("type", "inbound")
+    .eq("provider", "mpesa")
     .eq("checkout_request_id", cb.CheckoutRequestID)
     .maybeSingle();
 
@@ -51,6 +55,12 @@ Deno.serve(async (req) => {
     return ack();
   }
 
+  // Keep whatever the STK push recorded (notably metadata.method).
+  const metadata = {
+    ...(payment.metadata as Record<string, unknown> ?? {}),
+    provider_event: cb,
+  };
+
   if (cb.ResultCode === 0) {
     const meta = extractCallbackMetadata(cb.CallbackMetadata?.Item);
     await supabase
@@ -60,7 +70,7 @@ Deno.serve(async (req) => {
         provider_ref: meta.MpesaReceiptNumber
           ? String(meta.MpesaReceiptNumber)
           : null,
-        metadata: cb,
+        metadata,
       })
       .eq("id", payment.id)
       .in("status", ["pending", "processing"]);
@@ -71,7 +81,7 @@ Deno.serve(async (req) => {
       .update({
         status: cb.ResultCode === 1032 ? "cancelled" : "failed",
         failure_reason: cb.ResultDesc,
-        metadata: cb,
+        metadata,
       })
       .eq("id", payment.id)
       .in("status", ["pending", "processing"]);

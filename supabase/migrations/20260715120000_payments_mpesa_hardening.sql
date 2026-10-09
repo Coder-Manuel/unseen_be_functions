@@ -22,8 +22,10 @@ begin
 end $$;
 
 -- 2. Tighten money/provider/status columns.
+-- NB: no `alter column amount type numeric(12,2)` here. The column is already
+-- numeric, and changing a column's type is refused outright when any view
+-- selects it (payment_statements does), which would block this whole file.
 alter table public.payments
-  alter column amount   type numeric(12, 2),
   alter column amount   set not null,
   alter column currency set default 'KES',
   alter column currency set not null,
@@ -41,8 +43,14 @@ begin
       add constraint payments_amount_positive check (amount > 0);
   end if;
 
+  -- Only meaningful while status is text. It is an enum on deployed
+  -- databases (payment_status), which constrains the values already.
   if not exists (
     select 1 from pg_constraint where conname = 'payments_status_check'
+  ) and (
+    select atttypid = 'text'::regtype
+    from pg_attribute
+    where attrelid = 'public.payments'::regclass and attname = 'status'
   ) then
     alter table public.payments
       add constraint payments_status_check check (
