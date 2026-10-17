@@ -1,6 +1,7 @@
 // supabase/functions/livekit-webhook/index.ts
 import { createClient } from "@supabase/supabase-js";
 import { WebhookReceiver } from "livekit-server-sdk";
+import { recordEgress, startScoutRecording } from "./recordings.ts";
 
 Deno.serve(async (req) => {
   const supabase = createClient(
@@ -26,6 +27,18 @@ Deno.serve(async (req) => {
   }
   console.log("EVENT: ", event);
 
+  // egress_* events carry egressInfo instead of room. A failure is retried
+  // by LiveKit, which is safe since recordEgress upserts.
+  if (event.egressInfo) {
+    try {
+      await recordEgress(supabase, event.egressInfo);
+    } catch (e) {
+      console.error("Could not record egress:", event.egressInfo.egressId, e);
+      return new Response("Error", { status: 500 });
+    }
+    return new Response("OK", { status: 200 });
+  }
+
   const roomName = event.room?.name;
   if (!roomName) return new Response("OK");
 
@@ -43,6 +56,28 @@ Deno.serve(async (req) => {
       // Get current participants in the room from the event metadata
       const identity = event.participant?.identity;
 
+      const { data: session } = await supabase
+        .from("sessions")
+        .select("id, status")
+        .eq("room_name", roomName)
+        .maybeSingle();
+
+      // Only the scout is recorded, and only once the session is live.
+      // Recording must never block the session, so failures are just logged.
+      const recordScout = async () => {
+        if (!session || !mission?.scout_id) return;
+        try {
+          await startScoutRecording(supabase, {
+            roomName,
+            missionId,
+            sessionId: session.id,
+            scoutIdentity: mission.scout_id,
+          });
+        } catch (e) {
+          console.error("Could not start recording:", roomName, e);
+        }
+      };
+
       // Scout is streaming: stamp it once, which queues the SCOUT_LIVE push
       // (trg_notify_scout_live) if the client has not joined yet.
       if (identity && identity === mission?.scout_id) {
@@ -51,6 +86,9 @@ Deno.serve(async (req) => {
           .update({ host_joined_at: new Date().toISOString() })
           .eq("room_name", roomName)
           .is("host_joined_at", null);
+
+        // Rejoining a live session: their previous recording ended on leave.
+        if (session?.status === "live") await recordScout();
         break;
       }
 
@@ -68,6 +106,8 @@ Deno.serve(async (req) => {
         .from("missions")
         .update({ status: "live" })
         .eq("id", missionId);
+
+      await recordScout();
 
       break;
     }
