@@ -9,7 +9,7 @@ export interface FirebaseServiceAccount {
 // FCM HTTP v1 message, the subset this app sends.
 // https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages
 export interface FCMMessage {
-  token: string;
+  fid: string;
   notification: { title: string; body: string };
   // FCM only accepts string values here.
   data: Record<string, string>;

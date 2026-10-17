@@ -88,7 +88,7 @@ Deno.serve((r) =>
     // replaces the older one in the tray.
     const collapseId = notification.mission_id ?? notification.id;
     const message: FCMMessage = {
-      token,
+      fid: token,
       notification: content,
       data,
       android: {
