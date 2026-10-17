@@ -426,7 +426,9 @@ entrypoint = "./functions/livekit-webhook/index.ts"
 
 [functions.send-fcm]
 enabled = true
-verify_jwt = true
+# Called by the database (pg_net) with an UNSEEN_FN_KEY-signed token, not a
+# Supabase user JWT; ServiceAuthMiddleware verifies it.
+verify_jwt = false
 import_map = "./functions/send-fcm/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

@@ -5,3 +5,6 @@ export * from "./mpesa/types.ts";
 export * from "./mpesa/client.ts";
 export * from "./intasend/types.ts";
 export * from "./intasend/client.ts";
+export * from "./fcm/types.ts";
+export * from "./fcm/client.ts";
+export * from "./notifications/templates.ts";

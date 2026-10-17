@@ -36,12 +36,24 @@ Deno.serve(async (req) => {
       // Confirm if BOTH scout and client are now in the room
       const { data: mission } = await supabase
         .from("missions")
-        .select("client_id")
+        .select("client_id, scout_id")
         .eq("id", missionId)
         .single();
 
       // Get current participants in the room from the event metadata
       const identity = event.participant?.identity;
+
+      // Scout is streaming: stamp it once, which queues the SCOUT_LIVE push
+      // (trg_notify_scout_live) if the client has not joined yet.
+      if (identity && identity === mission?.scout_id) {
+        await supabase
+          .from("sessions")
+          .update({ host_joined_at: new Date().toISOString() })
+          .eq("room_name", roomName)
+          .is("host_joined_at", null);
+        break;
+      }
+
       if (identity !== mission?.client_id) break;
       await supabase
         .from("sessions")

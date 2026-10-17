@@ -1,17 +1,12 @@
 export const jsonHeader = { "Content-Type": "application/json" };
 
+// Must match the types the triggers in
+// migrations/20261018120100_mission_notifications.sql queue.
 export enum NotifType {
-    goLive = "GO_LIVE",
-    newMission = "NEW_MISSION",
-    missionUpdate = "MISSION_UPDATE",
-}
-
-export interface FCMNotifInput {
-    token?: string;
-    topic?: string;
-    notification: {
-        title: string;
-        body: string;
-    };
-    data?: Record<string, never>;
+    missionRequestPaid = "MISSION_REQUEST_PAID",
+    missionAccepted = "MISSION_ACCEPTED",
+    missionEnroute = "MISSION_ENROUTE",
+    missionDeclined = "MISSION_DECLINED",
+    missionReleased = "MISSION_RELEASED",
+    scoutLive = "SCOUT_LIVE",
 }
