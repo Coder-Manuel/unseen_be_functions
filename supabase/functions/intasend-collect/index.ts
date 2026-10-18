@@ -57,6 +57,8 @@ Deno.serve((r) =>
       .select(`
         id,
         status,
+        type,
+        accepted_at,
         price,
         currency,
         client:profiles!missions_client_id_fkey!inner (id, user_id)
@@ -79,6 +81,30 @@ Deno.serve((r) =>
         { error: "Only the mission client can pay for this mission" },
         { status: 403 },
       );
+    }
+
+    // A live request is only payable after its guide accepts, and only
+    // within the payment window (expire_unpaid_live_requests cancels it after).
+    if (mission.type === "live_request") {
+      if (mission.status !== "accepted" || !mission.accepted_at) {
+        return Response.json(
+          { error: "This live request is not awaiting payment" },
+          { status: 403 },
+        );
+      }
+      const { data: config } = await supabase
+        .from("app_config")
+        .select("value")
+        .eq("key", "live_request_payment")
+        .maybeSingle();
+      const windowMin = Number(config?.value?.minutes) || 30;
+      const deadline = Date.parse(mission.accepted_at) + windowMin * 60_000;
+      if (Date.now() > deadline) {
+        return Response.json(
+          { error: "The payment window for this live request has closed" },
+          { status: 410 },
+        );
+      }
     }
 
     const amount = Number(mission.price);

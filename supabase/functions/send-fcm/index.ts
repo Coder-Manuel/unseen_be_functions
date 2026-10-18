@@ -48,7 +48,6 @@ Deno.serve((r) =>
     const rendered = renderNotification(
       notification.type,
       notification.data ?? {},
-      notification.mission_id ?? "",
     );
     if (!rendered) {
       await finish({
@@ -63,9 +62,17 @@ Deno.serve((r) =>
 
     const { data: user } = await supabase
       .from("users")
-      .select("fcm_token")
+      .select("fcm_token, notifications_enabled")
       .eq("id", notification.recipient_user_id)
       .maybeSingle();
+    if (user?.notifications_enabled === false) {
+      await finish({
+        ...content,
+        status: "skipped",
+        last_error: "Notifications disabled",
+      });
+      return Response.json({ status: "skipped", reason: "disabled" });
+    }
     const token = user?.fcm_token;
     if (!token) {
       await finish({ ...content, status: "skipped", last_error: "No token" });
@@ -80,8 +87,6 @@ Deno.serve((r) =>
       notification_id: notification.id,
       type: notification.type,
       mission_id: notification.mission_id ?? "",
-      audience: rendered.audience,
-      route: rendered.route,
     });
 
     // Tag / collapse id = mission, so a newer update for the same mission
