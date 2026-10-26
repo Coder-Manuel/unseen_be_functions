@@ -415,7 +415,10 @@ entrypoint = "./functions/go-live/index.ts"
 
 [functions.livekit-webhook]
 enabled = true
-verify_jwt = true
+# Called by LiveKit with its own signed token (no "Bearer"), not a Supabase
+# JWT; WebhookReceiver verifies it. With this on, the gateway rejects every
+# event, so missions never go live or complete.
+verify_jwt = false
 import_map = "./functions/livekit-webhook/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -439,7 +442,9 @@ entrypoint = "./functions/send-fcm/index.ts"
 
 [functions.end-livekit-room]
 enabled = true
-verify_jwt = true
+# Called with an UNSEEN_FN_KEY-signed token, not a Supabase JWT;
+# ServiceAuthMiddleware verifies it.
+verify_jwt = false
 import_map = "./functions/end-livekit-room/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
