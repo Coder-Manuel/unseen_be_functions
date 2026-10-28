@@ -1,12 +1,16 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@panva/jose@6": "6.2.12",
     "jsr:@supabase/functions-js@2": "2.103.2",
     "npm:@supabase/supabase-js@^2.103.2": "2.103.2",
     "npm:livekit-server-sdk@^2.15.1": "2.15.1",
     "npm:openai@^4.52.5": "4.104.0"
   },
   "jsr": {
+    "@panva/jose@6.2.12": {
+      "integrity": "45dd3888cff0c45dbd91ca5279f7fd4324227042d19df91504aa2c0678b3edcc"
+    },
     "@supabase/functions-js@2.103.2": {
       "integrity": "73dfa32ea4b8c52ecf05e6b7d0dbfe7f0f5b494b513a86744734ea1a8ef1f431",
       "dependencies": [

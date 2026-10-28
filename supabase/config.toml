@@ -413,6 +413,12 @@ entrypoint = "./functions/go-live/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/go-live/*.html" ]
 
+[functions.end-session]
+enabled = true
+verify_jwt = true
+import_map = "./functions/end-session/deno.json"
+entrypoint = "./functions/end-session/index.ts"
+
 [functions.livekit-webhook]
 enabled = true
 # Called by LiveKit with its own signed token (no "Bearer"), not a Supabase

@@ -86,6 +86,10 @@ Deno.serve(async (req) => {
           .update({ host_joined_at: new Date().toISOString() })
           .eq("room_name", roomName)
           .is("host_joined_at", null);
+        await supabase
+          .from("sessions")
+          .update({ host_left_at: null })
+          .eq("room_name", roomName);
 
         // Rejoining a live session: their previous recording ended on leave.
         if (session?.status === "live") await recordScout();
@@ -96,6 +100,11 @@ Deno.serve(async (req) => {
 
       // Time's up or over: a late rejoin must not revive the session.
       if (session?.status === "ending" || session?.status === "ended") break;
+
+      await supabase
+        .from("sessions")
+        .update({ client_left_at: null })
+        .eq("room_name", roomName);
 
       // Only the client's first join starts the clock. Re-stamping started_at
       // on a rejoin pushed expire_live_rooms back and kept the mission live
@@ -119,6 +128,37 @@ Deno.serve(async (req) => {
       }
 
       await recordScout();
+
+      break;
+    }
+
+    case "participant_left": {
+      // Stamp who dropped and why, so a disconnect is visible on the server.
+      // participant_joined clears the stamp when they come back.
+      const { data: mission } = await supabase
+        .from("missions")
+        .select("client_id, scout_id")
+        .eq("id", missionId)
+        .single();
+
+      const identity = event.participant?.identity;
+      const column = identity && identity === mission?.scout_id
+        ? "host_left_at"
+        : identity && identity === mission?.client_id
+        ? "client_left_at"
+        : null;
+      if (!column) break;
+
+      await supabase
+        .from("sessions")
+        .update({
+          [column]: new Date().toISOString(),
+          last_disconnect_reason: disconnectReasonName(
+            event.participant?.disconnectReason,
+          ),
+        })
+        .eq("room_name", roomName)
+        .in("status", ["created", "live"]);
 
       break;
     }
@@ -164,3 +204,30 @@ Deno.serve(async (req) => {
 
   return new Response("OK", { status: 200 });
 });
+
+// @livekit/protocol's DisconnectReason; livekit-server-sdk does not re-export
+// it.
+const DISCONNECT_REASONS = [
+  "unknown",
+  "client_initiated",
+  "duplicate_identity",
+  "server_shutdown",
+  "participant_removed",
+  "room_deleted",
+  "state_mismatch",
+  "join_failure",
+  "migration",
+  "signal_close",
+  "room_closed",
+  "user_unavailable",
+  "user_rejected",
+  "sip_trunk_failure",
+  "connection_timeout",
+  "media_failure",
+  "agent_error",
+];
+
+function disconnectReasonName(reason?: number): string | null {
+  if (reason === undefined) return null;
+  return DISCONNECT_REASONS[reason] ?? `reason_${reason}`;
+}
