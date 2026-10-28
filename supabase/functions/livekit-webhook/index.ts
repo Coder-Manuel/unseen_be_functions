@@ -93,19 +93,30 @@ Deno.serve(async (req) => {
       }
 
       if (identity !== mission?.client_id) break;
-      await supabase
+
+      // Time's up or over: a late rejoin must not revive the session.
+      if (session?.status === "ending" || session?.status === "ended") break;
+
+      // Only the client's first join starts the clock. Re-stamping started_at
+      // on a rejoin pushed expire_live_rooms back and kept the mission live
+      // (and on the radar) long after the stream ended.
+      const { data: started } = await supabase
         .from("sessions")
         .update({
           status: "live",
           started_at: new Date().toISOString(),
         })
-        .eq("room_name", roomName);
+        .eq("room_name", roomName)
+        .is("started_at", null)
+        .select("id");
 
-      // Also update mission status
-      await supabase
-        .from("missions")
-        .update({ status: "live" })
-        .eq("id", missionId);
+      if (started?.length) {
+        await supabase
+          .from("missions")
+          .update({ status: "live" })
+          .eq("id", missionId)
+          .in("status", ["accepted", "enroute"]);
+      }
 
       await recordScout();
 
@@ -121,7 +132,8 @@ Deno.serve(async (req) => {
         .single();
 
       const endedAt = new Date();
-      const actualDurationS = session?.scheduled_duration_sec
+      // A room the client never joined has no started_at to measure from.
+      const actualDurationS = session?.started_at
         ? Math.floor(
           (endedAt.getTime() - new Date(session.started_at).getTime()) / 1000,
         )

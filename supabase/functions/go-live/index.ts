@@ -50,6 +50,18 @@ Deno.serve((r) =>
       ? mission.session[0]
       : mission.session;
 
+    // A token would let LiveKit recreate the room, and the rejoin would
+    // reopen a live check that is over.
+    if (
+      ["completed", "cancelled", "declined"].includes(mission.status) ||
+      ["ending", "ended"].includes(session?.status)
+    ) {
+      return Response.json(
+        { error: "This live check has ended" },
+        { status: 409 },
+      );
+    }
+
     if (!scout?.id) {
       return Response.json(
         { error: "Mission is not accepted" },
