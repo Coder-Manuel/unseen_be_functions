@@ -1,12 +1,15 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import {
+  AudioCodec,
   EgressClient,
   EgressInfo,
   EgressStatus,
   EncodedFileOutput,
   EncodedFileType,
+  EncodingOptions,
   RoomServiceClient,
   S3Upload,
+  VideoCodec,
 } from "livekit-server-sdk";
 
 // Must match public.recording_status in
@@ -46,6 +49,23 @@ function toStatus(status: EgressStatus): RecordingStatus {
       return "failed";
   }
 }
+
+// LiveKit's default (H264_720P_30) is landscape at ~3.1 Mbps, about 23 MB a
+// minute: a portrait camera comes out pillarboxed, and the upload hits the
+// project's storage size limit (413 EntityTooLarge) a few minutes in. This
+// keeps the guide's portrait frame and comes to about 12 MB a minute, ~730 MB
+// for a 60 minute live check plus overtime.
+const RECORDING_ENCODING = new EncodingOptions({
+  width: 720,
+  height: 1280,
+  framerate: 30,
+  videoCodec: VideoCodec.H264_MAIN,
+  videoBitrate: 2500,
+  audioCodec: AudioCodec.AAC,
+  audioBitrate: 64,
+  // Seconds between keyframes, so the file can be scrubbed.
+  keyFrameInterval: 2,
+});
 
 // LiveKit timestamps and durations are nanoseconds; 0 means unset.
 function nsToIso(ns: bigint): string | undefined {
@@ -94,7 +114,7 @@ export async function startScoutRecording(
         }),
       },
     }),
-  });
+  }, { encodingOptions: RECORDING_ENCODING });
 
   // egress_started may already have written this row; keep what it wrote.
   const { error } = await supabase.from("session_recordings").upsert(
