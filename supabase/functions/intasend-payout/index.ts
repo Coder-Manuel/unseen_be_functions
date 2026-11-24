@@ -1,5 +1,7 @@
-// Pays a completed mission's scout via IntaSend M-Pesa B2C.
-// Service-authenticated: money-out is only triggered by trusted backends.
+// Pays a completed mission's scout via IntaSend M-Pesa B2C: the mission price
+// less the platform commission (missions.guide_amount).
+// Service-authenticated: money-out is only triggered by trusted backends
+// (the dispatch_guide_payouts cron job).
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -19,7 +21,6 @@ Deno.serve((r) =>
     let payload: {
       mission_id?: string;
       phone_number?: string;
-      amount?: number;
     };
     try {
       payload = await req.json();
@@ -27,18 +28,10 @@ Deno.serve((r) =>
       return Response.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const { mission_id, phone_number } = payload;
-    if (!mission_id || !phone_number) {
+    const { mission_id } = payload;
+    if (!mission_id) {
       return Response.json(
-        { error: "mission_id and phone_number are required" },
-        { status: 400 },
-      );
-    }
-
-    const phone = normalizeKenyanPhone(phone_number);
-    if (!phone) {
-      return Response.json(
-        { error: "Invalid phone number, expected format 2547XXXXXXXX" },
+        { error: "mission_id is required" },
         { status: 400 },
       );
     }
@@ -48,7 +41,7 @@ Deno.serve((r) =>
       .select(`
         id,
         status,
-        price,
+        guide_amount,
         currency,
         scout:profiles!missions_scout_id_fkey (id, user_id)
       `)
@@ -76,6 +69,24 @@ Deno.serve((r) =>
       );
     }
 
+    // Defaults to the guide's account phone.
+    let phoneInput = payload.phone_number;
+    if (!phoneInput && scout.user_id) {
+      const { data: user } = await supabase
+        .from("users")
+        .select("phone")
+        .eq("id", scout.user_id)
+        .maybeSingle();
+      phoneInput = user?.phone ?? undefined;
+    }
+    const phone = phoneInput ? normalizeKenyanPhone(phoneInput) : null;
+    if (!phone) {
+      return Response.json(
+        { error: "Guide has no valid M-Pesa phone number" },
+        { status: 400 },
+      );
+    }
+
     // The client must have paid before the scout is paid out.
     const { data: inbound } = await supabase
       .from("payments")
@@ -92,16 +103,16 @@ Deno.serve((r) =>
       );
     }
 
-    // Defaults to the collected amount; a smaller amount (e.g. net of
-    // platform fees) may be passed, never more.
+    // Server-side split, never more than was collected.
     const collected = Number(inbound.amount);
-    const amount = payload.amount === undefined
-      ? collected
-      : Number(payload.amount);
+    const amount = Number(mission.guide_amount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > collected) {
       return Response.json(
-        { error: `amount must be > 0 and <= ${collected}` },
-        { status: 400 },
+        {
+          error:
+            `guide_amount ${mission.guide_amount} must be > 0 and <= ${collected}`,
+        },
+        { status: 409 },
       );
     }
 
