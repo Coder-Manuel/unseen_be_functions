@@ -70,7 +70,9 @@ async function handleCollection(
   const ref = invoice.api_ref ?? apiRef;
   let query = supabase
     .from("payments")
-    .select("id, status, amount, currency, metadata")
+    .select(
+      "id, status, amount, currency, metadata, mission_id, merchant_request_id",
+    )
     .eq("type", "inbound");
 
   if (ref && UUID_RE.test(ref)) {
@@ -93,7 +95,6 @@ async function handleCollection(
     console.warn("Collection event for unknown payment:", invoiceId, ref);
     return;
   }
-  if (FINAL.includes(payment.status)) return;
 
   let status = mapInvoiceState(invoice.state);
   let failureReason = invoice.failed_reason ?? null;
@@ -109,11 +110,16 @@ async function handleCollection(
       `Amount mismatch: got ${invoice.value} ${invoice.currency}, expected ${payment.amount} ${payment.currency}`;
   }
 
+  const previous = payment.metadata as Record<string, unknown> | null ?? {};
+  const superseded = (previous.superseded_invoices as string[] | undefined) ??
+    [];
+
+  // A retry re-prompted under the same row; the earlier prompt timing out or
+  // being cancelled says nothing about the current one.
+  if (status !== "success" && superseded.includes(invoice.invoice_id)) return;
+
   // Keep whatever the initiating call recorded (notably metadata.method).
-  const metadata = {
-    ...(payment.metadata as Record<string, unknown> ?? {}),
-    provider_event: invoice,
-  };
+  const metadata = { ...previous, provider_event: invoice };
 
   if (status === "processing") {
     await supabase
@@ -124,18 +130,102 @@ async function handleCollection(
     return;
   }
 
+  if (payment.status === "success") {
+    if (
+      status === "success" && payment.merchant_request_id !== invoice.invoice_id
+    ) {
+      console.error(
+        "Duplicate collection, refund needed:",
+        payment.id,
+        invoice.invoice_id,
+      );
+      await supabase
+        .from("payments")
+        .update({
+          metadata: {
+            ...previous,
+            duplicate_invoices: [
+              ...((previous.duplicate_invoices as string[] | undefined) ?? []),
+              invoice.invoice_id,
+            ],
+          },
+        })
+        .eq("id", payment.id);
+    }
+    return;
+  }
+
+  // A success is recorded even after the row was failed or cancelled (a
+  // timed-out or superseded prompt that the payer completed anyway).
+  const lateSuccess = status === "success" && FINAL.includes(payment.status);
+  if (FINAL.includes(payment.status) && !lateSuccess) return;
+
+  const update = {
+    status,
+    merchant_request_id: invoice.invoice_id,
+    provider_ref: status === "success"
+      ? invoice.mpesa_reference ?? invoice.invoice_id
+      : null,
+    failure_reason: status === "success" ? null : failureReason,
+    metadata,
+  };
+  const fromStatuses = lateSuccess
+    ? [payment.status]
+    : ["pending", "processing"];
+
+  const { error } = await supabase
+    .from("payments")
+    .update(update)
+    .eq("id", payment.id)
+    .in("status", fromStatuses);
+
+  // 23505: a newer attempt is the mission's active payment.
+  if (error?.code === "23505" && payment.mission_id) {
+    await settleOverNewerAttempt(supabase, payment.id, payment.mission_id);
+    await supabase
+      .from("payments")
+      .update(update)
+      .eq("id", payment.id)
+      .in("status", fromStatuses);
+  } else if (error) {
+    throw error;
+  }
+}
+
+// Clears the mission's newer in-flight attempt so a late success on an older
+// one can become the mission's payment. A newer attempt that already
+// succeeded means the client paid twice.
+async function settleOverNewerAttempt(
+  supabase: Supabase,
+  paymentId: string,
+  missionId: string,
+) {
+  const { data: other } = await supabase
+    .from("payments")
+    .select("id, status, metadata")
+    .eq("mission_id", missionId)
+    .eq("type", "inbound")
+    .neq("id", paymentId)
+    .in("status", ["pending", "processing", "success"])
+    .maybeSingle();
+  if (!other) return;
+
+  if (other.status === "success") {
+    console.error("Duplicate collection, refund needed:", paymentId, other.id);
+    throw new Error(`Mission ${missionId} already paid by ${other.id}`);
+  }
+
   await supabase
     .from("payments")
     .update({
-      status,
-      merchant_request_id: invoice.invoice_id,
-      provider_ref: status === "success"
-        ? invoice.mpesa_reference ?? invoice.invoice_id
-        : null,
-      failure_reason: status === "success" ? null : failureReason,
-      metadata,
+      status: "cancelled",
+      failure_reason: "Paid by an earlier M-Pesa request",
+      metadata: {
+        ...(other.metadata as Record<string, unknown> | null ?? {}),
+        settled_by: paymentId,
+      },
     })
-    .eq("id", payment.id)
+    .eq("id", other.id)
     .in("status", ["pending", "processing"]);
 }
 

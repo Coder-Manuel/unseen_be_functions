@@ -119,7 +119,7 @@ Deno.serve((r) =>
     // Reuse an in-flight inbound payment; reject if it is already paid.
     const { data: activeRows } = await supabase
       .from("payments")
-      .select("id, status")
+      .select("id, status, checkout_request_id, merchant_request_id, metadata")
       .eq("mission_id", mission_id)
       .eq("type", "inbound")
       .in("status", ["pending", "processing", "success"])
@@ -130,6 +130,18 @@ Deno.serve((r) =>
     if (active?.status === "success") {
       return Response.json({ error: "Mission already paid" }, { status: 409 });
     }
+
+    // A retry reuses the row, so its api_ref is shared with earlier prompts.
+    // The webhook ignores failures from these invoices, but still accepts a
+    // late success from one: that money really moved.
+    const superseded = active
+      ? [
+        ...((active.metadata?.superseded_invoices as string[] | undefined) ??
+          []),
+        active.checkout_request_id,
+        active.merchant_request_id,
+      ].filter((id, i, all): id is string => !!id && all.indexOf(id) === i)
+      : [];
 
     let paymentId = active?.id as string | undefined;
     if (!paymentId) {
@@ -172,7 +184,11 @@ Deno.serve((r) =>
             // The invoice is both the in-flight id and the settlement id here.
             checkout_request_id: stk.invoice.invoice_id,
             merchant_request_id: stk.invoice.invoice_id,
-            metadata: { method, provider_event: stk },
+            metadata: {
+              method,
+              provider_event: stk,
+              superseded_invoices: superseded,
+            },
           })
           .eq("id", paymentId);
 
@@ -200,7 +216,11 @@ Deno.serve((r) =>
           // The invoice id only exists once the card is charged; the webhook
           // fills merchant_request_id in then.
           checkout_request_id: checkout.id,
-          metadata: { method, provider_event: checkout },
+          metadata: {
+            method,
+            provider_event: checkout,
+            superseded_invoices: superseded,
+          },
         })
         .eq("id", paymentId);
 
